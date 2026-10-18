@@ -1,147 +1,297 @@
-import { Pressable, StatusBar, StyleSheet, Text, View } from "react-native";
+import { useRouter } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+import { useState } from "react";
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 
-export default function WelcomeScreen() {
+// Replace this with your backend's reachable URL.
+// Physical phone: use your computer's LAN IP, not localhost.
+const API_URL = "http://192.168.0.139:8080";
+
+export default function LoginScreen() {
+  const router = useRouter();
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleLogin = async () => {
+    if (loading) return;
+
+    if (!email.trim() || !password) {
+      setError("Please enter your email and password.");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+
+    try {
+      const response = await fetch(`${API_URL}/api/auth/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          email: email.trim(),
+          password,
+        }),
+      });
+      console.log("Got response");
+
+      if (!response.ok) {
+        // Includes incorrect credentials (e.g. HTTP 401).
+        throw new Error("Login failed");
+      }
+
+      const data = await response.json();
+
+      // Adjust this check to match your backend response.
+      if (!data.accessToken) {
+        throw new Error("Invalid login response");
+      }
+
+      // TODO: Store the access token securely and make it
+      // available to your authenticated API requests.
+
+      router.replace("/dashboard");
+    } catch {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F7FAF5" />
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar style="dark" />
 
-      <View style={styles.hero}>
-        <Text style={styles.cricketIcon}>🏏</Text>
-        <Text style={styles.ball}>🔴</Text>
-        <Text style={styles.heroText}>YOUR GAME.</Text>
-      </View>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <View style={styles.content}>
+          <View style={styles.logo}>
+            <Text style={styles.logoText}>A</Text>
+          </View>
 
-      <View style={styles.content}>
-        <Text style={styles.welcome}>Welcome to</Text>
-        <Text style={styles.title}>Box Cricket</Text>
+          <Text style={styles.heading}>Welcome back</Text>
+          <Text style={styles.subtitle}>
+            Sign in to continue to your account. now
+          </Text>
 
-        <Text style={styles.description}>
-          Find the best box cricket turfs near you, compare prices, and book
-          your next game with ease and play.
-        </Text>
+          <View style={styles.form}>
+            <Text style={styles.label}>Email address</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="you@example.com"
+              placeholderTextColor="#9CA3AF"
+              value={email}
+              onChangeText={(value) => {
+                setEmail(value);
+                setError("");
+              }}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete="email"
+              editable={!loading}
+            />
 
-        <View style={styles.dots}>
-          <View style={styles.activeDot} />
-          <View style={styles.dot} />
-          <View style={styles.dot} />
+            <Text style={styles.label}>Password</Text>
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="Enter your password"
+                placeholderTextColor="#9CA3AF"
+                value={password}
+                onChangeText={(value) => {
+                  setPassword(value);
+                  setError("");
+                }}
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                autoComplete="current-password"
+                editable={!loading}
+              />
+
+              <Pressable
+                onPress={() => setShowPassword((current) => !current)}
+                disabled={loading}
+                accessibilityRole="button"
+              >
+                <Text style={styles.link}>
+                  {showPassword ? "Hide" : "Show"}
+                </Text>
+              </Pressable>
+            </View>
+
+            {error ? (
+              <View
+                style={styles.errorBox}
+                accessibilityRole="alert"
+                accessibilityLiveRegion="polite"
+              >
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            ) : null}
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.loginButton,
+                pressed && !loading && styles.buttonPressed,
+                loading && styles.buttonDisabled,
+              ]}
+              onPress={handleLogin}
+              disabled={loading}
+              accessibilityRole="button"
+            >
+              {loading ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.loginButtonText}>Sign in</Text>
+              )}
+            </Pressable>
+          </View>
+
+          <Text style={styles.footer}>
+            Securely sign in to access your account.
+          </Text>
         </View>
-      </View>
-
-      <View style={styles.actions}>
-        <Pressable
-          style={styles.primaryButton}
-          onPress={() => console.log("Get started")}
-        >
-          <Text style={styles.primaryText}>Get Started →</Text>
-        </Pressable>
-
-        <Pressable
-          style={styles.secondaryButton}
-          onPress={() => console.log("Login")}
-        >
-          <Text style={styles.secondaryText}>I Already Have an Account</Text>
-        </Pressable>
-      </View>
-    </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: "#F8FAFC",
+  },
   container: {
     flex: 1,
-    backgroundColor: "#F7FAF5",
-    paddingHorizontal: 24,
-    paddingTop: 55,
-    paddingBottom: 30,
-  },
-  hero: {
-    height: "38%",
-    backgroundColor: "#DDF4E7",
-    borderRadius: 28,
-    alignItems: "center",
     justifyContent: "center",
-  },
-  cricketIcon: {
-    fontSize: 105,
-  },
-  ball: {
-    position: "absolute",
-    top: 25,
-    right: 30,
-    fontSize: 28,
-  },
-  heroText: {
-    color: "#137A4C",
-    fontSize: 12,
-    fontWeight: "800",
-    letterSpacing: 2,
-    marginTop: 12,
+    paddingHorizontal: 24,
   },
   content: {
-    flex: 1,
-    justifyContent: "center",
+    width: "100%",
+    maxWidth: 420,
+    alignSelf: "center",
+  },
+  logo: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: "#2563EB",
     alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 28,
   },
-  welcome: {
-    fontSize: 34,
-    fontWeight: "800",
-    color: "#168354",
+  logoText: {
+    color: "#FFFFFF",
+    fontSize: 28,
+    fontWeight: "700",
   },
-  title: {
-    fontSize: 38,
-    fontWeight: "900",
-    color: "#14252D",
-    marginTop: 2,
+  heading: {
+    fontSize: 32,
+    fontWeight: "700",
+    color: "#111827",
+    letterSpacing: -0.7,
   },
-  description: {
-    fontSize: 16,
-    color: "#64748B",
-    textAlign: "center",
-    lineHeight: 25,
-    marginTop: 20,
-    paddingHorizontal: 4,
+  subtitle: {
+    fontSize: 15,
+    color: "#6B7280",
+    marginTop: 10,
+    lineHeight: 23,
   },
-  dots: {
+  form: {
+    marginTop: 36,
+  },
+  label: {
+    color: "#374151",
+    fontSize: 14,
+    fontWeight: "600",
+    marginBottom: 9,
+  },
+  input: {
+    height: 52,
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    fontSize: 15,
+    color: "#111827",
+    backgroundColor: "#FFFFFF",
+    marginBottom: 24,
+  },
+  passwordContainer: {
+    height: 52,
     flexDirection: "row",
-    gap: 10,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    borderRadius: 10,
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 14,
+  },
+  passwordInput: {
+    flex: 1,
+    height: "100%",
+    fontSize: 15,
+    color: "#111827",
+  },
+  link: {
+    color: "#2563EB",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  errorBox: {
+    backgroundColor: "#FEF2F2",
+    borderWidth: 1,
+    borderColor: "#FECACA",
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 16,
+  },
+  errorText: {
+    color: "#B91C1C",
+    fontSize: 14,
+  },
+  loginButton: {
+    height: 52,
+    borderRadius: 10,
+    backgroundColor: "#2563EB",
+    alignItems: "center",
+    justifyContent: "center",
     marginTop: 28,
   },
-  activeDot: {
-    width: 11,
-    height: 11,
-    borderRadius: 6,
-    backgroundColor: "#168354",
+  buttonPressed: {
+    opacity: 0.8,
   },
-  dot: {
-    width: 11,
-    height: 11,
-    borderRadius: 6,
-    backgroundColor: "#C8D8D0",
+  buttonDisabled: {
+    opacity: 0.65,
   },
-  actions: {
-    gap: 14,
-  },
-  primaryButton: {
-    backgroundColor: "#168354",
-    paddingVertical: 19,
-    borderRadius: 35,
-    alignItems: "center",
-  },
-  primaryText: {
+  loginButtonText: {
     color: "#FFFFFF",
-    fontSize: 18,
-    fontWeight: "700",
+    fontSize: 16,
+    fontWeight: "600",
   },
-  secondaryButton: {
-    borderWidth: 1.5,
-    borderColor: "#168354",
-    paddingVertical: 17,
-    borderRadius: 35,
-    alignItems: "center",
-  },
-  secondaryText: {
-    color: "#168354",
-    fontSize: 15,
-    fontWeight: "700",
+  footer: {
+    color: "#6B7280",
+    fontSize: 13,
+    textAlign: "center",
+    marginTop: 32,
   },
 });

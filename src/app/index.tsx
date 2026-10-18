@@ -8,7 +8,7 @@ export default function WelcomeScreen() {
       <View style={styles.hero}>
         <Text style={styles.cricketIcon}>🏏</Text>
         <Text style={styles.ball}>🔴</Text>
-        <Text style={styles.heroText}>YOUR GAME. YOUR TURF.</Text>
+        <Text style={styles.heroText}>YOUR GAME.</Text>
       </View>
 
       <View style={styles.content}>

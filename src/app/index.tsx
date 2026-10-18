@@ -17,7 +17,7 @@ export default function WelcomeScreen() {
 
         <Text style={styles.description}>
           Find the best box cricket turfs near you, compare prices, and book
-          your next game with ease.
+          your next game with ease and play.
         </Text>
 
         <View style={styles.dots}>

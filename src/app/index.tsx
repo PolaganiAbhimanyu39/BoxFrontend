@@ -15,7 +15,7 @@ import {
 
 // Replace this with your backend's reachable URL.
 // Physical phone: use your computer's LAN IP, not localhost.
-const API_URL = "http://192.168.0.139:8080";
+const API_URL = "http://192.168.0.120:8080";
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -49,26 +49,31 @@ export default function LoginScreen() {
           password,
         }),
       });
-      console.log("Got response");
+      const data = await response.json().catch(() => null);
 
       if (!response.ok) {
-        // Includes incorrect credentials (e.g. HTTP 401).
-        throw new Error("Login failed");
+        throw new Error(
+          data?.message ??
+            (response.status === 401
+              ? "Invalid email or password."
+              : "Unable to sign in. Please try again."),
+        );
       }
 
-      const data = await response.json();
-
-      // Adjust this check to match your backend response.
-      if (!data.accessToken) {
+      if (!data?.token) {
         throw new Error("Invalid login response");
       }
 
-      // TODO: Store the access token securely and make it
+      // TODO: Store data.token securely and make it
       // available to your authenticated API requests.
 
-      router.replace("/dashboard");
-    } catch {
-      setError("Something went wrong. Please try again.");
+      router.replace("/explore");
+    } catch (loginError) {
+      setError(
+        loginError instanceof Error
+          ? loginError.message
+          : "Something went wrong. Please try again.",
+      );
     } finally {
       setLoading(false);
     }

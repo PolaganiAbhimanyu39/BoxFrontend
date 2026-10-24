@@ -1,9 +1,10 @@
-import { useRouter } from "expo-router";
+import { useSession } from "@/context/session";
 import { StatusBar } from "expo-status-bar";
 import { useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   SafeAreaView,
@@ -13,14 +14,16 @@ import {
   View,
 } from "react-native";
 
-// Replace this with your backend's reachable URL.
-// Physical phone: use your computer's LAN IP, not localhost.
-const API_URL = "http://192.168.0.120:8080";
+import { API_URL } from '@/services/api';
+import CreateUser from '@/components/create-user';
 
 export default function LoginScreen() {
-  const router = useRouter();
+  const { signIn } = useSession();
 
   const [email, setEmail] = useState("");
+  const [signingUp, setSigningUp] = useState(false);
+  const [signupBusy, setSignupBusy] = useState(false);
+  const [signupSuccess, setSignupSuccess] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -60,14 +63,11 @@ export default function LoginScreen() {
         );
       }
 
-      if (!data?.token) {
+      if (typeof data?.token !== "string" || typeof data.expiresIn !== "number") {
         throw new Error("Invalid login response");
       }
 
-      // TODO: Store data.token securely and make it
-      // available to your authenticated API requests.
-
-      router.replace("/explore");
+      signIn(data.token, data.expiresIn);
     } catch (loginError) {
       setError(
         loginError instanceof Error
@@ -97,6 +97,7 @@ export default function LoginScreen() {
             Sign in to continue to your account. now
           </Text>
 
+          {signupSuccess ? <Text accessibilityRole="alert" style={styles.signupSuccess}>{signupSuccess}</Text> : null}
           <View style={styles.form}>
             <Text style={styles.label}>Email address</Text>
             <TextInput
@@ -171,16 +172,22 @@ export default function LoginScreen() {
             </Pressable>
           </View>
 
+          <Pressable accessibilityRole="button" onPress={() => { setError(''); setSigningUp(true); }} style={styles.signupButton}><Text style={styles.link}>New player? Sign up</Text></Pressable>
           <Text style={styles.footer}>
             Securely sign in to access your account.
           </Text>
         </View>
       </KeyboardAvoidingView>
+      <Modal visible={signingUp} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => { if (!signupBusy) setSigningUp(false); }}>
+        {signingUp ? <CreateUser mode="signup" onBusyChange={setSignupBusy} onClose={() => setSigningUp(false)} onCreated={user => { setSigningUp(false); setEmail(user.email || ''); setPassword(''); setSignupSuccess('Your player account is ready. Sign in to continue.'); }} /> : null}
+      </Modal>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  signupButton: { minHeight: 48, alignItems: 'center', justifyContent: 'center', marginTop: 16 },
+  signupSuccess: { color: '#234E36', backgroundColor: '#E6F0D3', padding: 14, borderRadius: 12, marginTop: 16, lineHeight: 22 },
   safeArea: {
     flex: 1,
     backgroundColor: "#F8FAFC",

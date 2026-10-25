@@ -1,3 +1,4 @@
+import { AuthColors } from '@/constants/auth-colors';
 import { useSession } from "@/context/session";
 import { StatusBar } from "expo-status-bar";
 import { useState } from "react";
@@ -94,7 +95,7 @@ export default function LoginScreen() {
 
           <Text style={styles.heading}>Welcome back</Text>
           <Text style={styles.subtitle}>
-            Sign in to continue to your account. now
+            Sign in to continue to your account.
           </Text>
 
           {signupSuccess ? <Text accessibilityRole="alert" style={styles.signupSuccess}>{signupSuccess}</Text> : null}
@@ -103,7 +104,7 @@ export default function LoginScreen() {
             <TextInput
               style={styles.input}
               placeholder="you@example.com"
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor={AuthColors.muted}
               value={email}
               onChangeText={(value) => {
                 setEmail(value);
@@ -121,7 +122,7 @@ export default function LoginScreen() {
               <TextInput
                 style={styles.passwordInput}
                 placeholder="Enter your password"
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor={AuthColors.muted}
                 value={password}
                 onChangeText={(value) => {
                   setPassword(value);
@@ -165,7 +166,7 @@ export default function LoginScreen() {
               accessibilityRole="button"
             >
               {loading ? (
-                <ActivityIndicator color="#FFFFFF" />
+                <ActivityIndicator color={AuthColors.surface} />
               ) : (
                 <Text style={styles.loginButtonText}>Sign in</Text>
               )}
@@ -187,10 +188,10 @@ export default function LoginScreen() {
 
 const styles = StyleSheet.create({
   signupButton: { minHeight: 48, alignItems: 'center', justifyContent: 'center', marginTop: 16 },
-  signupSuccess: { color: '#234E36', backgroundColor: '#E6F0D3', padding: 14, borderRadius: 12, marginTop: 16, lineHeight: 22 },
+  signupSuccess: { color: AuthColors.success, backgroundColor: AuthColors.successBackground, padding: 14, borderRadius: 12, marginTop: 16, lineHeight: 22 },
   safeArea: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: AuthColors.background,
   },
   container: {
     flex: 1,
@@ -206,25 +207,25 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 16,
-    backgroundColor: "#2563EB",
+    backgroundColor: AuthColors.primary,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 28,
   },
   logoText: {
-    color: "#FFFFFF",
+    color: AuthColors.surface,
     fontSize: 28,
     fontWeight: "700",
   },
   heading: {
     fontSize: 32,
     fontWeight: "700",
-    color: "#111827",
+    color: AuthColors.heading,
     letterSpacing: -0.7,
   },
   subtitle: {
     fontSize: 15,
-    color: "#6B7280",
+    color: AuthColors.muted,
     marginTop: 10,
     lineHeight: 23,
   },
@@ -232,7 +233,7 @@ const styles = StyleSheet.create({
     marginTop: 36,
   },
   label: {
-    color: "#374151",
+    color: AuthColors.label,
     fontSize: 14,
     fontWeight: "600",
     marginBottom: 9,
@@ -240,12 +241,12 @@ const styles = StyleSheet.create({
   input: {
     height: 52,
     borderWidth: 1,
-    borderColor: "#D1D5DB",
+    borderColor: AuthColors.border,
     borderRadius: 10,
     paddingHorizontal: 14,
     fontSize: 15,
-    color: "#111827",
-    backgroundColor: "#FFFFFF",
+    color: AuthColors.text,
+    backgroundColor: AuthColors.surface,
     marginBottom: 24,
   },
   passwordContainer: {
@@ -253,38 +254,38 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#D1D5DB",
+    borderColor: AuthColors.border,
     borderRadius: 10,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: AuthColors.surface,
     paddingHorizontal: 14,
   },
   passwordInput: {
     flex: 1,
     height: "100%",
     fontSize: 15,
-    color: "#111827",
+    color: AuthColors.text,
   },
   link: {
-    color: "#2563EB",
+    color: AuthColors.link,
     fontSize: 14,
     fontWeight: "600",
   },
   errorBox: {
-    backgroundColor: "#FEF2F2",
+    backgroundColor: AuthColors.errorBackground,
     borderWidth: 1,
-    borderColor: "#FECACA",
+    borderColor: AuthColors.errorBorder,
     borderRadius: 8,
     padding: 12,
     marginTop: 16,
   },
   errorText: {
-    color: "#B91C1C",
+    color: AuthColors.error,
     fontSize: 14,
   },
   loginButton: {
     height: 52,
     borderRadius: 10,
-    backgroundColor: "#2563EB",
+    backgroundColor: AuthColors.primary,
     alignItems: "center",
     justifyContent: "center",
     marginTop: 28,
@@ -296,12 +297,12 @@ const styles = StyleSheet.create({
     opacity: 0.65,
   },
   loginButtonText: {
-    color: "#FFFFFF",
+    color: AuthColors.surface,
     fontSize: 16,
     fontWeight: "600",
   },
   footer: {
-    color: "#6B7280",
+    color: AuthColors.muted,
     fontSize: 13,
     textAlign: "center",
     marginTop: 32,

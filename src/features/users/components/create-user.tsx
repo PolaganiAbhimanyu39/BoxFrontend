@@ -3,12 +3,14 @@ import { useEffect, useRef, useState, type ComponentRef } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ApiError, apiRequest } from '@/services/api';
+import { useSession } from '@/context/session';
 
 type Role = 'VENUE_OWNER' | 'APP_OWNER' | 'PLAYER';
-type CreatedUser = { userId: number; fullName: string; role: Role; email: string | null };
+type CreatedUser = { userId: number; fullName: string; role: Role; email: string | null; login?: { token: string; expiresIn: number; user: { userId: number; role: string } } };
 const endpoints: Record<Role, string> = { VENUE_OWNER: '/api/users/venueOwner', APP_OWNER: '/api/users/appOwner', PLAYER: '/api/users/player' };
 
 export default function CreateUser({ mode = 'admin', onClose, onCreated, onBusyChange }: { mode?: 'admin' | 'owner' | 'signup'; onClose: () => void; onCreated: (user: CreatedUser) => void; onBusyChange: (busy: boolean) => void }) {
+  const { session } = useSession();
   const signup = mode === 'signup';
   const [role, setRole] = useState<Role>(signup ? 'PLAYER' : 'VENUE_OWNER');
   const [form, setForm] = useState({ fullName: '', phone: '', email: '', password: '' });
@@ -41,9 +43,21 @@ export default function CreateUser({ mode = 'admin', onClose, onCreated, onBusyC
     submitting.current = true; setSaving(true); onBusyChange(true); setError('');
     const controller = new AbortController(); request.current = controller;
     try {
-      const result = await apiRequest(endpoints[role], { method: 'POST', signal: controller.signal, body: JSON.stringify({ fullName: form.fullName.trim(), phone: form.phone.trim(), email: form.email.trim() || null, password: form.password }) });
+      const result = await apiRequest(endpoints[role], { method: 'POST', signal: controller.signal, headers: session ? { Authorization: 'Bearer ' + session.token } : {}, body: JSON.stringify({ fullName: form.fullName.trim(), phone: form.phone.trim(), email: form.email.trim() || null, password: form.password }) });
       if (!result || typeof result !== 'object' || !('userId' in result) || !Number.isSafeInteger(result.userId)) throw new ApiError('Could not confirm account creation. Try signing in or checking the owner list before retrying.');
-      if (alive.current) onCreated({ userId: result.userId as number, fullName: form.fullName.trim(), role, email: form.email.trim() || null });
+      let login: CreatedUser['login'];
+      if (signup) {
+        try {
+          const data = await apiRequest('/api/auth/login', { method: 'POST', signal: controller.signal, body: JSON.stringify({ email: form.email.trim(), password: form.password }) });
+          if (data && typeof data === 'object' && 'token' in data && typeof data.token === 'string'
+              && 'expiresIn' in data && typeof data.expiresIn === 'number' && data.expiresIn > 0
+              && 'user' in data && data.user && typeof data.user === 'object' && 'userId' in data.user
+              && data.user.userId === result.userId && 'role' in data.user && data.user.role === 'PLAYER') {
+            login = { token: data.token, expiresIn: data.expiresIn, user: { userId: result.userId as number, role: 'PLAYER' } };
+          }
+        } catch { /* Account creation succeeded. Offer normal sign-in without creating it again. */ }
+      }
+      if (alive.current) onCreated({ userId: result.userId as number, fullName: form.fullName.trim(), role, email: form.email.trim() || null, login });
     } catch (err) {
       if (alive.current) {
         const message = err instanceof Error ? err.message : 'Unable to create the account.';

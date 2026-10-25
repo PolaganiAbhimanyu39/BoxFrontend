@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ComponentRef } from 'react';
 import { ActivityIndicator, Modal, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ApiError, apiRequest } from '@/services/api';
+import { useSession } from '@/context/session';
 import CreateUser from '@/features/users/components/create-user';
 
 type Choice = { id: number; name: string; active: boolean };
@@ -32,6 +33,7 @@ function isOwners(value: unknown): value is Owner[] {
 }
 
 export default function CreateVenue({ onClose, onCreated, onBusyChange }: { onClose: () => void; onCreated: (name: string) => void; onBusyChange: (busy: boolean) => void }) {
+  const { session } = useSession();
   const [form, setForm] = useState(initial);
   const [creatingOwner, setCreatingOwner] = useState(false);
   const [ownerBusy, setOwnerBusy] = useState(false);
@@ -62,7 +64,7 @@ export default function CreateVenue({ onClose, onCreated, onBusyChange }: { onCl
     async function load() {
       try {
         const [users, sportList, amenityList] = await Promise.all([
-          apiRequest('/api/users/all', { signal: controller.signal }),
+          apiRequest('/api/users/all', { signal: controller.signal, headers: { Authorization: 'Bearer ' + session?.token } }),
           apiRequest('/api/venues/sports', { signal: controller.signal }),
           apiRequest('/api/amenities', { signal: controller.signal }),
         ]);
@@ -81,7 +83,7 @@ export default function CreateVenue({ onClose, onCreated, onBusyChange }: { onCl
     }
     void load();
     return () => { active = false; controller.abort(); };
-  }, [attempt]);
+  }, [attempt, session?.token]);
   function reloadSelections() { setLoading(true); setLoadError(''); setAttempt(value => value + 1); }
   function update(key: Field, value: string) {
     setForm(current => ({ ...current, [key]: value }));

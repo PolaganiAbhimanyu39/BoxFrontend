@@ -21,6 +21,7 @@ import CreateUser from '@/features/users/components/create-user';
 export default function LoginScreen() {
   const { signIn } = useSession();
 
+  const [locationAfterSignIn, setLocationAfterSignIn] = useState(false);
   const [email, setEmail] = useState("");
   const [signingUp, setSigningUp] = useState(false);
   const [signupBusy, setSignupBusy] = useState(false);
@@ -68,7 +69,7 @@ export default function LoginScreen() {
         throw new Error("Invalid login response");
       }
 
-      signIn(data.token, data.expiresIn, data.user);
+      signIn(data.token, data.expiresIn, data.user, locationAfterSignIn);
     } catch (loginError) {
       setError(
         loginError instanceof Error
@@ -180,7 +181,7 @@ export default function LoginScreen() {
         </View>
       </KeyboardAvoidingView>
       <Modal visible={signingUp} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => { if (!signupBusy) setSigningUp(false); }}>
-        {signingUp ? <CreateUser mode="signup" onBusyChange={setSignupBusy} onClose={() => setSigningUp(false)} onCreated={user => { setSigningUp(false); setEmail(user.email || ''); setPassword(''); setSignupSuccess('Your player account is ready. Sign in to continue.'); }} /> : null}
+        {signingUp ? <CreateUser mode="signup" onBusyChange={setSignupBusy} onClose={() => setSigningUp(false)} onCreated={user => { setSigningUp(false); setEmail(user.email || ''); setPassword(''); setLocationAfterSignIn(true); if (user.login) { signIn(user.login.token, user.login.expiresIn, user.login.user, true); } else { setSignupSuccess('Your player account is ready. Sign in to set up nearby grounds.'); } }} /> : null}
       </Modal>
     </SafeAreaView>
   );

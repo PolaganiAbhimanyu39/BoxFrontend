@@ -1,10 +1,11 @@
 import { createContext, useContext, useEffect, useState, type PropsWithChildren } from 'react';
 import { AppState } from 'react-native';
 
-type Session = { token: string; expiresAt: number };
+type SessionUser = { userId: number; role: string };
+type Session = { token: string; expiresAt: number; user: SessionUser };
 type AuthContext = {
   session: Session | null;
-  signIn: (token: string, expiresIn: number) => void;
+  signIn: (token: string, expiresIn: number, user: SessionUser) => void;
   signOut: () => void;
 };
 const SessionContext = createContext<AuthContext | null>(null);
@@ -23,11 +24,14 @@ export function SessionProvider({ children }: PropsWithChildren) {
     });
     return () => { clearInterval(timer); subscription.remove(); };
   }, [session]);
-  function signIn(token: string, expiresIn: number) {
+  function signIn(token: string, expiresIn: number, user: SessionUser) {
     if (!token.trim() || !Number.isFinite(expiresIn) || expiresIn <= 0) {
       throw new Error('Invalid login response');
     }
-    setSession({ token, expiresAt: Date.now() + expiresIn * 1000 });
+    if (!Number.isSafeInteger(user?.userId) || user.userId <= 0 || !['APP_OWNER', 'VENUE_OWNER', 'PLAYER'].includes(user.role)) {
+      throw new Error('Invalid login user');
+    }
+    setSession({ token, expiresAt: Date.now() + expiresIn * 1000, user });
   }
   return (
     <SessionContext value={{ session, signIn, signOut: () => setSession(null) }}>

@@ -1,11 +1,13 @@
-import { useEffect, useRef, useState, type ComponentRef } from 'react';
+import { useCallback, useEffect, useRef, useState, type ComponentRef } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useSession } from '@/context/session';
 import { API_URL } from '@/services/api';
-import CreateVenue from '@/components/create-venue';
-import CreateUser from '@/components/create-user';
+import { router, useFocusEffect } from 'expo-router';
+
+
+
 
 type Venue = {
   id: number;
@@ -22,6 +24,7 @@ type Venue = {
 
 export default function DashboardScreen() {
   const { session, signOut } = useSession();
+  const isAppOwner = session?.user.role === 'APP_OWNER';
   const { width } = useWindowDimensions();
   const wide = width >= 760;
   const scroll = useRef<ComponentRef<typeof ScrollView>>(null);
@@ -32,11 +35,6 @@ export default function DashboardScreen() {
   const [query, setQuery] = useState('');
   const [attempt, setAttempt] = useState(0);
   const [selected, setSelected] = useState<Venue | null>(null);
-  const [creating, setCreating] = useState(false);
-  const [creatingUser, setCreatingUser] = useState(false);
-  const [userBusy, setUserBusy] = useState(false);
-  const [creationBusy, setCreationBusy] = useState(false);
-  const [success, setSuccess] = useState('');
 
   useEffect(() => {
     const controller = new AbortController();
@@ -65,6 +63,8 @@ export default function DashboardScreen() {
     return () => { active = false; clearTimeout(timeout); controller.abort(); };
   }, [session?.token, attempt]);
 
+  useFocusEffect(useCallback(() => { setLoading(true); setError(''); setAttempt(value => value + 1); }, []));
+
   const filtered = venues.filter(venue => [venue.name, venue.city, venue.locality].filter(Boolean).join(' ').toLowerCase().includes(query.trim().toLowerCase()));
   function browse() { scroll.current?.scrollTo({ y: venuesY.current, animated: true }); }
   function retry() { setLoading(true); setError(''); setAttempt(value => value + 1); }
@@ -79,8 +79,7 @@ export default function DashboardScreen() {
             <Pressable onPress={signOut} accessibilityRole="button" style={({ pressed }) => [s.signOut, pressed && s.pressed]}><Text style={s.signOutText}>Sign out ↗</Text></Pressable>
           </View>
 
-          <View style={s.createRow}><Pressable onPress={() => { setSuccess(''); setCreatingUser(true); }} accessibilityRole="button" style={s.addUser}><Text style={s.addUserText}>+ Add user</Text></Pressable><Pressable onPress={() => { setSuccess(''); setCreating(true); }} accessibilityRole="button" style={s.addVenue}><Text style={s.addVenueText}>+ Add venue</Text></Pressable></View>
-          {success ? <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={s.success}>{success}</Text> : null}
+          {isAppOwner ? <View style={s.createRow}><Pressable onPress={() => router.push('/users')} accessibilityRole="button" style={s.addUser}><Text style={s.addUserText}>Users</Text></Pressable><Pressable onPress={() => router.push('/venues')} accessibilityRole="button" style={s.addVenue}><Text style={s.addVenueText}>Venues</Text></Pressable></View> : null}
           <View style={s.greeting}><Text style={s.eyebrow}>YOUR CRICKET STARTS HERE</Text><Text style={[s.title, wide && s.titleWide]}>Good to have you back.</Text><Text style={s.muted}>A little less scrolling. A little more cricket.</Text></View>
 
           <View style={[s.hero, wide && s.heroWide]}>
@@ -105,12 +104,6 @@ export default function DashboardScreen() {
           <View style={s.footer}><Text style={s.footerBrand}>BOX.</Text><Text style={s.footerText}>Good games start with good company.</Text></View>
         </View>
       </ScrollView>
-      <Modal visible={creatingUser} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => { if (!userBusy) setCreatingUser(false); }}>
-        {creatingUser ? <CreateUser onBusyChange={setUserBusy} onClose={() => setCreatingUser(false)} onCreated={user => { setCreatingUser(false); setSuccess(`${user.fullName}'s account has been created.`); }} /> : null}
-      </Modal>
-      <Modal visible={creating} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => { if (!creationBusy) setCreating(false); }}>
-        {creating ? <CreateVenue onBusyChange={setCreationBusy} onClose={() => setCreating(false)} onCreated={name => { setCreating(false); setSuccess(`${name} is active and ready for players.`); setQuery(''); retry(); }} /> : null}
-      </Modal>
       <Modal visible={!!selected} transparent animationType="fade" onRequestClose={() => setSelected(null)}>
         <View style={s.modalBackdrop}><View style={s.modalCard} accessibilityViewIsModal>{selected ? <><Text style={s.eyebrow}>GROUND DETAILS</Text><Text style={s.sectionTitle}>{selected.name}</Text><Text style={s.muted}>{[selected.addressLine1, selected.addressLine2, selected.locality, selected.city, selected.state, selected.postalCode].filter(Boolean).join(', ')}</Text>{selected.description ? <Text style={s.modalDescription}>{selected.description}</Text> : null}{selected.phone ? <Text selectable style={s.detailText}>Contact: {selected.phone}</Text> : null}<Pressable accessibilityRole="button" onPress={() => setSelected(null)} style={s.primary}><Text style={s.primaryText}>Done</Text></Pressable></> : null}</View></View>
       </Modal>

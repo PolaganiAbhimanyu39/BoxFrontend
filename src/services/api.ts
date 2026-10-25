@@ -25,6 +25,7 @@ export async function apiRequest(path: string, options: RequestInit = {}): Promi
       }
       throw new ApiError(typeof data?.message === 'string' ? data.message : 'Unable to complete the request.', fields);
     }
+    if (response.status === 204) return null;
     if (data === null) throw new ApiError('The server returned an unreadable response.');
     return data;
   } catch (error) {

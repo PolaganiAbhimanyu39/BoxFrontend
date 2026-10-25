@@ -19,6 +19,10 @@ function Navigation() {
         <Stack.Screen name="dashboard" options={{ title: 'Dashboard', headerShown: false }} />
         <Stack.Screen name="explore" options={{ title: 'Explore' }} />
       </Stack.Protected>
+      <Stack.Protected guard={session?.user.role === 'APP_OWNER'}>
+        <Stack.Screen name="users" options={{ headerShown: false }} />
+        <Stack.Screen name="venues" options={{ headerShown: false }} />
+      </Stack.Protected>
     </Stack>
   );
 }

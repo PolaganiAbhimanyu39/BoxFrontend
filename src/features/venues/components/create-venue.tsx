@@ -2,11 +2,11 @@ import { useEffect, useRef, useState, type ComponentRef } from 'react';
 import { ActivityIndicator, Modal, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ApiError, apiRequest } from '@/services/api';
-import CreateUser from '@/components/create-user';
+import CreateUser from '@/features/users/components/create-user';
 
 type Choice = { id: number; name: string; active: boolean };
 type Owner = { userId: number; fullName: string; phone: string; status: string; role: string };
-const initial = { name: '', description: '', phone: '', email: '', addressLine1: '', addressLine2: '', locality: '', city: '', state: '', postalCode: '', latitude: '', longitude: '', timezone: 'Asia/Kolkata' };
+const initial = { name: '', description: '', phone: '', email: '', addressLine1: '', addressLine2: '', locality: '', city: '', state: '', postalCode: '', latitude: '', longitude: '', locationUrl: '', timezone: 'Asia/Kolkata' };
 type Field = keyof typeof initial;
 const fields: { key: Field; label: string; max?: number; optional?: boolean; keyboard?: TextInputProps['keyboardType']; multiline?: boolean }[] = [
   { key: 'name', label: 'Venue name', max: 150 },
@@ -21,6 +21,7 @@ const fields: { key: Field; label: string; max?: number; optional?: boolean; key
   { key: 'postalCode', label: 'Postal code', max: 10 },
   { key: 'latitude', label: 'Latitude', keyboard: 'numbers-and-punctuation' },
   { key: 'longitude', label: 'Longitude', keyboard: 'numbers-and-punctuation' },
+  { key: 'locationUrl', label: 'Location URL', optional: true, keyboard: 'url' },
   { key: 'timezone', label: 'Timezone', max: 50 },
 ];
 function isChoices(value: unknown): value is Choice[] {
@@ -96,6 +97,12 @@ export default function CreateVenue({ onClose, onCreated, onBusyChange }: { onCl
       if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(value) || !Number.isFinite(Number(value)) || Number(value) < min || Number(value) > max) invalid[key] = `Enter a number from ${min} to ${max}.`;
     }
     if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) invalid.email = 'Enter a valid email address.';
+    if (form.locationUrl.trim()) {
+      try {
+        const url = new URL(form.locationUrl.trim());
+        if (url.protocol !== 'https:' || !url.hostname || /\s/.test(form.locationUrl.trim())) throw new Error('Invalid URL');
+      } catch { invalid.locationUrl = 'Enter a valid HTTPS location URL.'; }
+    }
     if (!ownerId) invalid.ownerUserId = 'Select the venue owner.';
     if (!sportIds.length) invalid.sportTypeIds = 'Select at least one sport.';
     setErrors(invalid);
@@ -127,7 +134,8 @@ export default function CreateVenue({ onClose, onCreated, onBusyChange }: { onCl
           {fields.map((field, index) => <View key={field.key} style={s.field}>
             {index === 0 ? <Text style={s.section}>Venue details</Text> : index === 4 ? <Text style={s.section}>Where is the venue?</Text> : index === 10 ? <><Text style={s.section}>Ground coordinates</Text><Text style={s.hint}>Enter the venue coordinates from your map listing. Latitude first, then longitude.</Text></> : null}
             <Text style={s.label}>{field.label}{field.optional ? ' (optional)' : ' *'}</Text>
-            <TextInput accessibilityLabel={`${field.label}${field.optional ? ', optional' : ', required'}`} editable={!saving} value={form[field.key]} onChangeText={value => update(field.key, value)} maxLength={field.max} keyboardType={field.keyboard} multiline={field.multiline} autoCapitalize={['email', 'timezone', 'latitude', 'longitude'].includes(field.key) ? 'none' : 'sentences'} autoCorrect={!['email', 'timezone', 'latitude', 'longitude'].includes(field.key)} placeholderTextColor="#7B8580" placeholder={field.key === 'latitude' ? '-90 to 90' : field.key === 'longitude' ? '-180 to 180' : undefined} style={[s.input, field.multiline && s.textarea, !!errors[field.key] && s.invalid]} />
+            <TextInput accessibilityLabel={`${field.label}${field.optional ? ', optional' : ', required'}`} editable={!saving} value={form[field.key]} onChangeText={value => update(field.key, value)} maxLength={field.max} keyboardType={field.keyboard} multiline={field.multiline} autoCapitalize={['email', 'timezone', 'latitude', 'longitude', 'locationUrl'].includes(field.key) ? 'none' : 'sentences'} autoCorrect={!['email', 'timezone', 'latitude', 'longitude', 'locationUrl'].includes(field.key)} placeholderTextColor="#7B8580" placeholder={field.key === 'locationUrl' ? 'https://maps.app.goo.gl/...' : field.key === 'latitude' ? '-90 to 90' : field.key === 'longitude' ? '-180 to 180' : undefined} style={[s.input, field.multiline && s.textarea, !!errors[field.key] && s.invalid]} />
+            {field.key === 'locationUrl' ? <Text style={s.hint}>Paste the venue’s HTTPS map link. Coordinates above are still required.</Text> : null}
             {errors[field.key] ? <Text style={s.errorText}>{errors[field.key]}</Text> : null}
           </View>)}
           <View style={s.sectionBlock}><Text style={s.section}>Owner, sports & facilities</Text>

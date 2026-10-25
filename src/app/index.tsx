@@ -15,7 +15,7 @@ import {
 } from "react-native";
 
 import { API_URL } from '@/services/api';
-import CreateUser from '@/components/create-user';
+import CreateUser from '@/features/users/components/create-user';
 
 export default function LoginScreen() {
   const { signIn } = useSession();
@@ -67,7 +67,7 @@ export default function LoginScreen() {
         throw new Error("Invalid login response");
       }
 
-      signIn(data.token, data.expiresIn);
+      signIn(data.token, data.expiresIn, data.user);
     } catch (loginError) {
       setError(
         loginError instanceof Error

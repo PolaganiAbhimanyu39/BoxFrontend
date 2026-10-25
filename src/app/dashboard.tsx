@@ -5,6 +5,10 @@ import { StatusBar } from 'expo-status-bar';
 import { useSession } from '@/context/session';
 import { API_URL } from '@/services/api';
 import { router, useFocusEffect } from 'expo-router';
+import { useIsFocused } from 'expo-router';
+import { useNearbyGrounds } from '@/features/venues/use-nearby-grounds';
+import { currentLocation, saveLocation } from '@/features/venues/location';
+import { ExternalLink } from '@/components/external-link';
 
 
 
@@ -20,10 +24,32 @@ type Venue = {
   state: string;
   postalCode: string;
   phone: string | null;
+  locationUrl?: string | null;
 };
 
 export default function DashboardScreen() {
-  const { session, signOut } = useSession();
+  const { session, signOut, dismissLocationIntro } = useSession();
+  const isPlayer = session?.user.role === 'PLAYER';
+  const focused = useIsFocused();
+  const nearby = useNearbyGrounds(isPlayer ? session?.token : undefined, focused);
+  const [manual, setManual] = useState(false);
+  const [areaQuery, setAreaQuery] = useState('');
+  const [selectedArea, setSelectedArea] = useState('');
+  const [introBusy, setIntroBusy] = useState(false);
+  const [introError, setIntroError] = useState('');
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  async function setupLocation() {
+    if (introBusy || !session) return;
+    setIntroBusy(true); setIntroError('');
+    try {
+      const fix = await currentLocation(true);
+      if (!mounted.current) return;
+      await saveLocation(session.token, fix);
+      if (mounted.current) dismissLocationIntro();
+    } catch (err) { if (mounted.current) setIntroError(err instanceof Error ? err.message : 'Choose an area manually.'); }
+    finally { if (mounted.current) setIntroBusy(false); }
+  }
   const isAppOwner = session?.user.role === 'APP_OWNER';
   const { width } = useWindowDimensions();
   const wide = width >= 760;
@@ -35,6 +61,8 @@ export default function DashboardScreen() {
   const [query, setQuery] = useState('');
   const [attempt, setAttempt] = useState(0);
   const [selected, setSelected] = useState<Venue | null>(null);
+  const locationUrl = selected?.locationUrl?.trim();
+  const mapUrl = locationUrl?.startsWith('https://') ? locationUrl as `https://${string}` : null;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -65,9 +93,13 @@ export default function DashboardScreen() {
 
   useFocusEffect(useCallback(() => { setLoading(true); setError(''); setAttempt(value => value + 1); }, []));
 
-  const filtered = venues.filter(venue => [venue.name, venue.city, venue.locality].filter(Boolean).join(' ').toLowerCase().includes(query.trim().toLowerCase()));
+  const visibleVenues = nearby.enabled ? nearby.grounds : venues;
+  const displayedLoading = nearby.enabled ? nearby.busy : loading;
+  const displayedError = nearby.enabled ? nearby.error : error;
+  const areas = [...new Set(venues.flatMap(venue => [venue.city, venue.locality].filter((value): value is string => !!value)))].sort();
+  const filtered = visibleVenues.filter(venue => (!selectedArea || [venue.city, venue.locality].includes(selectedArea))).filter(venue => [venue.name, venue.city, venue.locality].filter(Boolean).join(' ').toLowerCase().includes(query.trim().toLowerCase()));
   function browse() { scroll.current?.scrollTo({ y: venuesY.current, animated: true }); }
-  function retry() { setLoading(true); setError(''); setAttempt(value => value + 1); }
+  function retry() { if (nearby.enabled) { void nearby.enable(); } else { setLoading(true); setError(''); setAttempt(value => value + 1); } }
 
   return (
     <SafeAreaView style={s.screen}>
@@ -96,22 +128,56 @@ export default function DashboardScreen() {
           </View>
 
           <View onLayout={event => { venuesY.current = event.nativeEvent.layout.y; }} style={s.venueSection}>
-            <View style={[s.sectionHeading, !wide && s.sectionHeadingMobile]}><View><Text style={s.sectionTitle}>Find your next ground</Text><Text style={s.muted}>Discover active venues and get the details.</Text></View><View style={s.countBadge}><Text style={s.countText}>{loading ? 'Loading grounds…' : error ? 'Grounds unavailable' : venues.length + (venues.length === 1 ? ' ground' : ' grounds')}</Text></View></View>
-            <View style={s.searchBox}><Text style={s.searchGlyph}>⌕</Text><TextInput accessibilityLabel="Search grounds by name or city" value={query} onChangeText={setQuery} placeholder="Search by ground, area or city" placeholderTextColor="#7B8580" autoCorrect={false} style={s.searchInput} />{query ? <Pressable accessibilityRole="button" accessibilityLabel="Clear search" onPress={() => setQuery('')} style={s.clear}><Text>✕</Text></Pressable> : null}</View>
+            <View style={[s.sectionHeading, !wide && s.sectionHeadingMobile]}><View><Text style={s.sectionTitle}>Find your next ground</Text><Text style={s.muted}>Discover active venues and get the details.</Text></View><View style={s.countBadge}><Text style={s.countText}>{displayedLoading ? 'Loading grounds…' : displayedError ? 'Grounds unavailable' : visibleVenues.length + (visibleVenues.length === 1 ? ' ground' : ' grounds')}</Text></View></View>
+            <View style={s.searchRow}>
+              {isPlayer ? <Pressable accessibilityRole="button" accessibilityState={{ selected: nearby.enabled, busy: nearby.busy }} disabled={nearby.busy} onPress={() => { setQuery(''); setSelectedArea(''); void nearby.enable(); }} style={[s.nearbyButton, nearby.enabled && s.nearbySelected]}><Text style={s.detailText}>{nearby.busy ? 'Locating…' : 'Nearby me'}</Text></Pressable> : null}
+              <View style={[s.searchBox, s.searchInRow]}><Text style={s.searchGlyph}>⌕</Text><TextInput accessibilityLabel="Search grounds by name or city" value={query} onChangeText={setQuery} placeholder="Search by ground, area or city" placeholderTextColor="#7B8580" autoCorrect={false} style={s.searchInput} />{query ? <Pressable accessibilityRole="button" accessibilityLabel="Clear search" onPress={() => setQuery('')} style={s.clear}><Text>✕</Text></Pressable> : null}</View></View>
+            {isPlayer ? <View style={s.locationOptions}>
+              <Pressable accessibilityRole="button" onPress={() => { nearby.disable(); setManual(true); }} style={s.clear}><Text style={s.detailText}>Choose area manually</Text></Pressable>
+              {nearby.enabled || selectedArea ? <Pressable accessibilityRole="button" onPress={() => { nearby.disable(); setSelectedArea(''); }} style={s.clear}><Text style={s.detailText}>Show all grounds</Text></Pressable> : null}
+            </View> : null}
+            {selectedArea ? <Text style={s.locationNote}>Browsing {selectedArea}</Text> : null}
+            {nearby.enabled ? <Text style={s.locationNote}>Within a 15 km geographic radius, not driving distance. Updates while this screen is active.</Text> : null}
+            {!nearby.enabled && nearby.error ? <Text accessibilityRole="alert" style={s.locationNote}>{nearby.error}</Text> : null}
 
-            {loading ? <View style={s.stateBox}><ActivityIndicator color="#17664A" /><Text style={s.muted}>Finding your next pitch…</Text></View> : error ? <View style={s.stateBox}><Text style={s.stateTitle}>Let’s try that again</Text><Text style={s.muted} accessibilityRole="alert">{error}</Text><Pressable onPress={retry} accessibilityRole="button" style={s.secondary}><Text style={s.secondaryText}>Retry</Text></Pressable></View> : filtered.length === 0 ? <View style={s.stateBox}><Text style={s.emptySymbol}>⌁</Text><Text style={s.stateTitle}>{query ? 'No matching grounds' : 'The next innings is on its way'}</Text><Text style={s.stateDescription}>{query ? 'Try another ground name, area or city.' : 'Active grounds will appear here as they become available.'}</Text></View> : <View style={s.grid}>{filtered.map((venue, index) => <Pressable key={venue.id} onPress={() => setSelected(venue)} accessibilityRole="button" accessibilityLabel={'View ' + venue.name} style={({ pressed }) => [s.card, wide && s.cardWide, pressed && s.pressed]}><View style={[s.cardArt, index % 2 === 1 && s.cardArtAlt]}><Text style={s.cardNumber}>{String(index + 1).padStart(2, '0')}</Text><View style={s.activeBadge}><View style={s.dot} /><Text style={s.activeText}>ACTIVE GROUND</Text></View><View style={s.artLine} /><View style={s.artLineTwo} /></View><View style={s.cardBody}><Text style={s.city}>{venue.city.toUpperCase()}</Text><Text style={s.cardTitle}>{venue.name}</Text><Text style={s.muted} numberOfLines={2}>{[venue.locality, venue.city].filter(Boolean).join(' · ')}</Text><View style={s.cardFooter}><Text style={s.detailText}>View ground details</Text><Text style={s.arrow}>↗</Text></View></View></Pressable>)}</View>}
+            {displayedLoading ? <View style={s.stateBox}><ActivityIndicator color="#17664A" /><Text style={s.muted}>Finding your next pitch…</Text></View> : displayedError ? <View style={s.stateBox}><Text style={s.stateTitle}>Let’s try that again</Text><Text style={s.muted} accessibilityRole="alert">{displayedError}</Text><Pressable onPress={retry} accessibilityRole="button" style={s.secondary}><Text style={s.secondaryText}>Retry</Text></Pressable></View> : filtered.length === 0 ? <View style={s.stateBox}><Text style={s.emptySymbol}>⌁</Text><Text style={s.stateTitle}>{query ? 'No matching grounds' : 'The next innings is on its way'}</Text><Text style={s.stateDescription}>{query ? 'Try another ground name, area or city.' : nearby.enabled ? 'No active grounds found within 15 km. Try another area or show all grounds.' : 'Active grounds will appear here as they become available.'}</Text></View> : <View style={s.grid}>{filtered.map((venue, index) => <Pressable key={venue.id} onPress={() => setSelected(venue)} accessibilityRole="button" accessibilityLabel={'View ' + venue.name} style={({ pressed }) => [s.card, wide && s.cardWide, pressed && s.pressed]}><View style={[s.cardArt, index % 2 === 1 && s.cardArtAlt]}><Text style={s.cardNumber}>{String(index + 1).padStart(2, '0')}</Text><View style={s.activeBadge}><View style={s.dot} /><Text style={s.activeText}>ACTIVE GROUND</Text></View><View style={s.artLine} /><View style={s.artLineTwo} /></View><View style={s.cardBody}><Text style={s.city}>{venue.city.toUpperCase()}</Text><Text style={s.cardTitle}>{venue.name}</Text><Text style={s.muted} numberOfLines={2}>{[venue.locality, venue.city].filter(Boolean).join(' · ')}</Text><View style={s.cardFooter}><Text style={s.detailText}>View ground details</Text><Text style={s.arrow}>↗</Text></View></View></Pressable>)}</View>}
           </View>
           <View style={s.footer}><Text style={s.footerBrand}>BOX.</Text><Text style={s.footerText}>Good games start with good company.</Text></View>
         </View>
       </ScrollView>
+      <Modal visible={!!session?.locationIntro && isPlayer} transparent animationType="fade" onRequestClose={() => { if (!introBusy) dismissLocationIntro(); }}>
+        <View style={s.modalBackdrop}><View style={s.modalCard} accessibilityViewIsModal>
+          <Text style={s.sectionTitle}>Find grounds near you</Text>
+          <Text style={s.muted}>Allow location while using Box to discover grounds within 15 km. We save only your latest coordinates, accuracy and capture time. Nearby mode refreshes when you move; no background tracking.</Text>
+          {introError ? <Text accessibilityRole="alert" style={s.muted}>{introError}</Text> : null}
+          <Pressable disabled={introBusy} onPress={() => void setupLocation()} accessibilityRole="button" style={s.primary}><Text style={s.primaryText}>{introBusy ? 'Saving location…' : 'Use my location'}</Text></Pressable>
+          <Pressable disabled={introBusy} onPress={() => { dismissLocationIntro(); setManual(true); }} accessibilityRole="button" style={s.secondary}><Text style={s.secondaryText}>Choose area manually</Text></Pressable>
+          <Pressable disabled={introBusy} onPress={dismissLocationIntro} accessibilityRole="button" style={s.clear}><Text style={s.detailText}>Not now</Text></Pressable>
+        </View></View>
+      </Modal>
+      <Modal visible={manual} transparent animationType="fade" onRequestClose={() => setManual(false)}>
+        <View style={s.modalBackdrop}><View style={s.modalCard} accessibilityViewIsModal>
+          <Text style={s.sectionTitle}>Choose city or locality</Text><Text style={s.muted}>Browse grounds by area without sharing your device location. Area search does not apply a 15 km radius.</Text>
+          <TextInput accessibilityLabel="Find a city or locality" value={areaQuery} onChangeText={setAreaQuery} placeholder="Type an area" style={s.searchInput} />
+          <ScrollView style={{ maxHeight: 240 }}>{areas.filter(area => area.toLowerCase().includes(areaQuery.trim().toLowerCase())).map(area => <Pressable key={area} accessibilityRole="button" onPress={() => { nearby.disable(); setSelectedArea(area); setQuery(''); setManual(false); }} style={s.clear}><Text style={s.detailText}>{area}</Text></Pressable>)}</ScrollView>
+          {!areas.length ? <Text style={s.muted}>No areas loaded yet. Close and retry the grounds list.</Text> : null}
+          <Pressable onPress={() => setManual(false)} accessibilityRole="button" style={s.secondary}><Text style={s.secondaryText}>Close</Text></Pressable>
+        </View></View>
+      </Modal>
       <Modal visible={!!selected} transparent animationType="fade" onRequestClose={() => setSelected(null)}>
-        <View style={s.modalBackdrop}><View style={s.modalCard} accessibilityViewIsModal>{selected ? <><Text style={s.eyebrow}>GROUND DETAILS</Text><Text style={s.sectionTitle}>{selected.name}</Text><Text style={s.muted}>{[selected.addressLine1, selected.addressLine2, selected.locality, selected.city, selected.state, selected.postalCode].filter(Boolean).join(', ')}</Text>{selected.description ? <Text style={s.modalDescription}>{selected.description}</Text> : null}{selected.phone ? <Text selectable style={s.detailText}>Contact: {selected.phone}</Text> : null}<Pressable accessibilityRole="button" onPress={() => setSelected(null)} style={s.primary}><Text style={s.primaryText}>Done</Text></Pressable></> : null}</View></View>
+        <View style={s.modalBackdrop}><View style={s.modalCard} accessibilityViewIsModal>{selected ? <><Text style={s.eyebrow}>GROUND DETAILS</Text><Text style={s.sectionTitle}>{selected.name}</Text><Text style={s.muted}>{[selected.addressLine1, selected.addressLine2, selected.locality, selected.city, selected.state, selected.postalCode].filter(Boolean).join(', ')}</Text>{selected.description ? <Text style={s.modalDescription}>{selected.description}</Text> : null}{selected.phone ? <Text selectable style={s.detailText}>Contact: {selected.phone}</Text> : null}{mapUrl ? <ExternalLink href={mapUrl} accessibilityLabel="Open ground location in maps" style={[s.detailText, { textDecorationLine: 'underline' }]}>Location: {mapUrl}</ExternalLink> : null}<Pressable accessibilityRole="button" onPress={() => setSelected(null)} style={s.primary}><Text style={s.primaryText}>Done</Text></Pressable></> : null}</View></View>
       </Modal>
     </SafeAreaView>
   );
 }
 
 const s = StyleSheet.create({
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  searchInRow: { flex: 1, minWidth: 0, marginBottom: 0 },
+  nearbyButton: { minHeight: 52, paddingHorizontal: 12, justifyContent: 'center', borderRadius: 14, borderWidth: 1, borderColor: '#CBD7C5', backgroundColor: '#FFFFFF' },
+  nearbySelected: { backgroundColor: '#E6F0D3', borderColor: '#276445' },
+  locationOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  locationNote: { color: '#69766B', fontSize: 12, lineHeight: 19, marginBottom: 18 },
   createRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingTop: 20 },
   addUser: { borderWidth: 1, borderColor: '#17664A', paddingHorizontal: 18, paddingVertical: 14, borderRadius: 12, minHeight: 48, justifyContent: 'center' },
   addUserText: { color: '#17664A', fontSize: 14, fontWeight: '700' },
